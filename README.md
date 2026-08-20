@@ -18,6 +18,16 @@
 - Drizzle ORM（schema 定义在 `src/storage/database/shared/schema.ts`）
 - QR：`qrcode.react`（生成）+ `jsqr`（扫描）
 
+## 界面预览
+
+| 落地页 | 登录 | 仪表盘 |
+| --- | --- | --- |
+| ![home](screenshots/home.png) | ![login](screenshots/login.png) | ![dashboard](screenshots/dashboard.png) |
+
+| 我的影协 | 排片表 |
+| --- | --- |
+| ![orgs](screenshots/orgs.png) | ![screenings](screenshots/screenings.png) |
+
 ## 快速开始
 
 ### 0. 准备 Supabase
