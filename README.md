@@ -1,76 +1,140 @@
-# Clube
+# Clube · 影协放映助手
 
-Clube 是一个面向高校影协 / 放映组 / 艺术策展团队的 Web MVP，覆盖从组织创建、成员加入、排片发布、成员报名，到匿名评分、短评收集和数据导出的完整流程。
+一站式覆盖高校影协「排片 → 报名 → 签到 → 评分 → 复盘」的极客风管理工具。
+
+## 功能
+
+- **组织管理**：创建/加入影协（邀请码 / 审批 / 开放加入），admin / officer / member 三级角色
+- **排片**：新建场次，填电影信息、地点、时间、容量、curator note，生成 6 位签到码 + QR 码
+- **签到**：成员扫码或输码签到；干事端内置摄像头扫码工具（jsqr）
+- **匿名评分**：每人每场一次 1-10 分 + 短评（user_id 仅去重，永不外显）
+- **学期总结**：自动生成复盘报告（场次统计 / 评分分布 / 上座率）
 
 ## 技术栈
-- React 19
-- Vite
-- TypeScript
-- React Router HashRouter
-- Vitest + Testing Library
-- Supabase
 
-## 当前能力
-- 创建组织并成为管理员
-- 邀请码加入 / 审核加入组织
-- 成员角色展示与管理员转移入口
-- 排片日历与活动详情
-- 普通成员报名
-- 观影后匿名评分与短评
-- 影评 / 公告内容流
-- CSV 数据导出
-- 默认 demo mode，可先看完整前端
+- Next.js 16 (App Router) + React 19 + TypeScript 5
+- Tailwind CSS 4 + shadcn/ui（自绘极简元件）
+- Supabase Auth + Supabase Postgres（服务端用 Service Role Key，浏览器端用 anon key + RLS）
+- Drizzle ORM（schema 定义在 `src/storage/database/shared/schema.ts`）
+- QR：`qrcode.react`（生成）+ `jsqr`（扫描）
 
-## 本地运行
+## 快速开始
+
+### 0. 准备 Supabase
+
+1. 在 [supabase.com](https://supabase.com) 创建项目
+2. 复制 `src/storage/database/shared/schema.ts` 中的表结构到 Supabase SQL Editor 执行（或用 drizzle-kit push）
+3. 在项目 Settings → API 获取 URL / anon key / service_role key
+
+### 1. 安装依赖
 
 ```bash
-npm install
-npm run dev
+pnpm install   # 必须用 pnpm（preinstall 已强制）
 ```
 
-本地启动后，终端会打印一个地址，通常是：
+### 2. 配置环境变量
 
 ```bash
-http://localhost:5173/
+cp .env.example .env
+# 填入 SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY
 ```
 
-把这个地址复制到浏览器就能先看前端。
-
-## 本地测试
+### 3. 开发
 
 ```bash
-npm run test
-npm run build
+pnpm dev       # http://localhost:5000
 ```
 
-## Supabase 连接方法
-1. 在 Supabase 创建项目。
-2. 运行 `supabase/schema.sql` 中的 SQL。
-3. 复制 `.env.example` 为 `.env.local`。
-4. 写入：
+### 4. 构建 & 启动生产
 
 ```bash
-VITE_SUPABASE_URL=你的项目地址
-VITE_SUPABASE_ANON_KEY=你的匿名 key
+pnpm build
+pnpm start     # 默认 0.0.0.0:5000，可用 PORT/HOSTNAME 覆盖
 ```
 
-更详细的步骤见 `docs/supabase-setup.md`。
+## 服务器部署
 
-## 部署
+标准 Node.js 部署（任意 VPS / 云服务器 / Docker）：
 
-### Vercel
-- 导入 GitHub 仓库
-- Framework Preset 选 `Vite`
-- Build Command: `npm run build`
-- Output Directory: `dist`
-- 配置环境变量 `VITE_SUPABASE_URL` 与 `VITE_SUPABASE_ANON_KEY`
+```bash
+# 1. 服务器上
+git clone https://github.com/NoahIsARider/Clube.git
+cd Clube
+pnpm install
+cp .env.example .env && vim .env   # 填环境变量
+pnpm build
+pnpm start                          # 生产服务
+```
 
-### GitHub Pages
-- 项目已使用 `HashRouter`
-- `vite.config.ts` 已设置 `base: './'`
-- 执行 `npm run build` 后发布 `dist` 目录即可
+推荐用 pm2 守护：
 
-## 设计文档
-- `DESIGN.md`
-- `docs/plans/2026-07-15-clube-mvp.md`
-- `docs/supabase-setup.md`
+```bash
+npm i -g pm2
+pm2 start "pnpm start" --name clube
+pm2 save
+```
+
+或配 systemd 单元。反向代理（nginx/caddy）将 80/443 转发到 5000 即可。
+
+### Docker 部署
+
+```bash
+docker build -t clube .
+docker run -d -p 5000:5000 --env-file .env clube
+```
+
+## API 一览
+
+所有需登录接口通过 `x-session` 头（Supabase access token）鉴权，前端用 `authedFetch()` 自动携带。
+
+| 路径 | 方法 | 说明 |
+| --- | --- | --- |
+| `/api/supabase-config` | GET | 公开：返回 supabase url/anonKey（安全，RLS 保护） |
+| `/api/me` | GET | 当前用户资料 |
+| `/api/orgs` | GET/POST | 我的组织列表 / 创建 |
+| `/api/orgs/[id]` | GET/PATCH/DELETE | 详情 / 修改 / 解散（admin） |
+| `/api/orgs/[id]/members` | GET/POST | 成员列表 / 申请加入 |
+| `/api/orgs/[id]/members/[memberId]` | PATCH/DELETE | 审核 / 改角色 / 踢人 |
+| `/api/orgs/[id]/invites` | GET/POST | 邀请码列表 / 生成 |
+| `/api/orgs/join` | POST | 通过邀请码加入 |
+| `/api/orgs/[id]/screenings` | GET/POST | 场次列表 / 新建 |
+| `/api/orgs/[id]/report` | GET | 学期末总结 |
+| `/api/screenings/[id]` | GET/PATCH/DELETE | 场次详情 / 修改 / 删除 |
+| `/api/screenings/[id]/signup` | POST/DELETE | 报名 / 取消 |
+| `/api/screenings/[id]/checkin` | POST | 签到（code，兼容 QR） |
+| `/api/screenings/[id]/ratings` | POST | 匿名评分 + 短评 |
+
+## 项目结构
+
+```
+src/
+├─ app/
+│  ├─ page.tsx                        # 登录态路由跳转
+│  ├─ login/page.tsx                  # 登录/注册（邮箱+密码）
+│  ├─ app/                            # 需登录主 App（AppShell 包裹）
+│  │  ├─ page.tsx                     # Dashboard
+│  │  ├─ orgs/                        # 我的影协
+│  │  ├─ screenings/                  # 场次 / 新建 / 详情 / 扫码签到
+│  │  └─ ...                          # 学期总结 report 等
+│  └─ api/                            # 后端接口
+├─ components/                        # app-shell / geek-ui / ui(shadcn)
+├─ lib/                               # api-auth / authed-fetch / org-permission / supabase
+└─ storage/database/
+   ├─ supabase-client.ts              # 服务端 supabase 单例（.env 加载）
+   └─ shared/schema.ts                # Drizzle Schema（Postgres）
+```
+
+## 常用命令
+
+```bash
+pnpm dev            # 开发
+pnpm build          # 生产构建
+pnpm start          # 生产启动
+pnpm ts-check       # TypeScript 检查
+pnpm lint           # ESLint
+pnpm validate       # ts-check + lint 并行
+```
+
+## 设计语言
+
+极客美学：黑底磷绿 + 衬线大字 + 等宽 caption + 1px 网格线，见 `DESIGN.md`。
